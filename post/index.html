@@ -60,9 +60,9 @@ $("pub").onclick=async()=>{$("pub").disabled=true;const S=t=>$("status").textCon
   r=await api("post/publish/content/init/",{post_info:{...base,description:$("cap").value,title:$("cap").value.slice(0,90)},source_info:{source:"PULL_FROM_URL",photo_cover_index:0,photo_images:urls},post_mode:"DIRECT_POST",media_type:"PHOTO"});}
  else{const f=files[0];S("initialising upload…");
   r=await api("post/publish/video/init/",{post_info:{...base,disable_duet:!$("c_duet").checked,disable_stitch:!$("c_stitch").checked},source_info:{source:"FILE_UPLOAD",video_size:f.size,chunk_size:f.size,total_chunk_count:1}});
-  if(r.error.code!=="ok")throw Error(r.error.message);S("uploading video…");
+  if(r.error.code!=="ok")throw Error(r.error.code+": "+r.error.message+(r.error.code==="unaudited_client_can_only_post_to_private_accounts"?"\n→ App not yet audited by TikTok: set your TikTok account to Private to post during testing.":""));S("uploading video…");
   const up=await fetch(r.data.upload_url,{method:"PUT",headers:{"Content-Type":f.type||"video/mp4","Content-Range":`bytes 0-${f.size-1}/${f.size}`},body:f});if(!up.ok)throw Error("upload failed "+up.status);}
- if(r.error.code!=="ok")throw Error(r.error.message);const id=r.data.publish_id;
+ if(r.error.code!=="ok")throw Error(r.error.code+": "+r.error.message+(r.error.code==="unaudited_client_can_only_post_to_private_accounts"?"\n→ App not yet audited by TikTok: set your TikTok account to Private to post during testing.":""));const id=r.data.publish_id;
  for(let i=0;i<60;i++){await new Promise(z=>setTimeout(z,3000));const s=await api("post/publish/status/fetch/",{publish_id:id});const st=s.data&&s.data.status;S(st+(s.data&&s.data.fail_reason?" – "+s.data.fail_reason:""));
   if(st==="PUBLISH_COMPLETE"){S("✅ Published to TikTok!");break;}if(st==="FAILED")break;}
  }catch(e){S("❌ "+e.message);}upd();};
