@@ -1,0 +1,70 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Post to TikTok – Roman Heart Publisher</title><link rel="icon" href="/favicon.png">
+<style>body{font-family:system-ui,sans-serif;max-width:560px;margin:1rem auto;padding:0 1rem;color:#222}button{font-size:1rem;padding:.7rem 1rem;border-radius:8px;border:0;background:#fe2c55;color:#fff;width:100%}button:disabled{background:#bbb}.card{border:1px solid #ddd;border-radius:10px;padding:1rem;margin:1rem 0}#me{display:flex;align-items:center;gap:.7rem}#me img{width:48px;height:48px;border-radius:50%}label{display:block;margin:.5rem 0}select,textarea,input[type=file]{width:100%;font-size:1rem;box-sizing:border-box}#prev img,#prev video{max-width:100%;max-height:300px;margin:.2rem 0;border-radius:6px}.sw{display:flex;justify-content:space-between;align-items:center}.muted{color:#777;font-size:.85rem}.hide{display:none}#status{white-space:pre-wrap}</style>
+<script src="config.js"></script></head><body>
+<header><a href="/"><img src="/logo.png" width="40" style="vertical-align:middle;border-radius:8px"></a> <b>Roman Heart Publisher</b> · <a href="/privacy/">Privacy</a> · <a href="/terms/">Terms</a></header>
+<div id="login" class="card"><p>Connect your TikTok account to publish your own photos and videos.</p><button id="lb">Log in with TikTok</button><p class="muted">You will be asked to approve: user.info.basic, video.upload, video.publish.</p></div>
+<div id="app" class="hide">
+ <div class="card" id="me"><img id="av" alt=""><div>Posting to: <b id="nick"></b><div class="muted" id="limit"></div></div></div>
+ <div class="card"><label>Media (1 video, or 1–35 photos)<input type="file" id="file" accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/webp" multiple></label><div id="prev"></div></div>
+ <div class="card"><label>Caption<textarea id="cap" rows="3" maxlength="2200" placeholder="Write a caption… #hashtags"></textarea></label>
+  <label>Who can view this post<select id="priv"><option value="" selected disabled>Select privacy level</option></select></label>
+  <div class="sw"><span>Allow comments</span><input type="checkbox" id="c_comment"></div>
+  <div class="sw vid"><span>Allow Duet</span><input type="checkbox" id="c_duet"></div>
+  <div class="sw vid"><span>Allow Stitch</span><input type="checkbox" id="c_stitch"></div></div>
+ <div class="card"><div class="sw"><b>Disclose post content</b><input type="checkbox" id="disc"></div>
+  <p class="muted">Turn on to disclose that this post promotes goods or services in exchange for something of value.</p>
+  <div id="discopts" class="hide"><label><input type="checkbox" id="b_org"> <b>Your brand</b> – you are promoting yourself or your own business. Will be labeled "Promotional content".</label>
+  <label><input type="checkbox" id="b_con"> <b>Branded content</b> – you are promoting another brand or a third party. Will be labeled "Paid partnership".</label><p class="muted" id="dischint"></p></div></div>
+ <p class="muted" id="decl">By posting, you agree to TikTok's <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Music Usage Confirmation</a>.</p>
+ <button id="pub" disabled>Publish to TikTok</button>
+ <div class="card" id="status">Status: not posted yet</div>
+ <p class="muted">After publishing, it may take a few minutes for the content to process and appear on your profile.</p>
+ <p><a href="#" id="out">Log out</a></p></div>
+<script>
+const W=window.WORKER, CK="sbawonvm7x4j810uiz", RED="https://romanheart.github.io/", $=id=>document.getElementById(id);
+let tok=JSON.parse(sessionStorage.tt||"null"), ci=null, files=[];
+const b64u=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+async function api(p,body){const r=await fetch(W+"/api/"+p,{method:"POST",headers:{Authorization:"Bearer "+tok.access_token,"Content-Type":"application/json"},body:JSON.stringify(body||{})});return r.json();}
+$("lb").onclick=async()=>{if(!W){alert("Backend not configured yet.");return;}
+ const st=b64u(crypto.getRandomValues(new Uint8Array(16))),v=b64u(crypto.getRandomValues(new Uint8Array(32)));
+ const ch=b64u(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));sessionStorage.st=st;sessionStorage.v=v;
+ location="https://www.tiktok.com/v2/auth/authorize/?"+new URLSearchParams({client_key:CK,response_type:"code",scope:"user.info.basic,video.upload,video.publish",redirect_uri:RED,state:st,code_challenge:ch,code_challenge_method:"S256"});};
+$("out").onclick=e=>{e.preventDefault();sessionStorage.clear();location="/post/";};
+async function init(){const q=new URLSearchParams(location.search);
+ if(q.get("code")){if(q.get("state")!==sessionStorage.st){alert("Login state mismatch");return;}
+  const r=await fetch(W+"/token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:q.get("code"),code_verifier:sessionStorage.v})}).then(r=>r.json());
+  if(!r.access_token){alert("Login failed: "+(r.error_description||r.error));return;} tok=r;sessionStorage.tt=JSON.stringify(r);history.replaceState(0,"","/post/");}
+ if(q.get("error")) alert("TikTok login cancelled: "+q.get("error_description"));
+ if(!tok)return; $("login").classList.add("hide");$("app").classList.remove("hide");
+ const r=await api("post/publish/creator_info/query/");if(r.error&&r.error.code!=="ok"){alert(r.error.message);return;} ci=r.data;
+ $("nick").textContent=ci.creator_nickname+" (@"+ci.creator_username+")";$("av").src=ci.creator_avatar_url;
+ $("limit").textContent="Max video length: "+ci.max_video_post_duration_sec+" s";
+ ci.privacy_level_options.forEach(o=>{const e=document.createElement("option");e.value=o;e.textContent={PUBLIC_TO_EVERYONE:"Everyone",MUTUAL_FOLLOW_FRIENDS:"Friends",FOLLOWER_OF_CREATOR:"Followers",SELF_ONLY:"Only me"}[o]||o;$("priv").append(e);});
+ [["comment","comment_disabled"],["duet","duet_disabled"],["stitch","stitch_disabled"]].forEach(([k,d])=>{if(ci[d]){$("c_"+k).disabled=true;$("c_"+k).parentNode.title="Disabled in your TikTok settings";}});
+ upd();}
+const isPhoto=()=>files.length&&files[0].type.startsWith("image");
+$("file").onchange=async e=>{files=[...e.target.files];$("prev").innerHTML="";
+ if(files.some(f=>f.type.startsWith("video"))&&files.length>1){alert("Choose one video or photos only");files=[];}
+ for(const f of files){const u=URL.createObjectURL(f);const el=document.createElement(f.type.startsWith("image")?"img":"video");el.src=u;if(el.tagName=="VIDEO"){el.controls=true;el.onloadedmetadata=()=>{if(ci&&el.duration>ci.max_video_post_duration_sec){alert("Video too long for your account");files=[];upd();}}}$("prev").append(el);}
+ upd();};
+function upd(){document.querySelectorAll(".vid").forEach(x=>x.classList.toggle("hide",isPhoto()));
+ const d=$("disc").checked;$("discopts").classList.toggle("hide",!d);const con=d&&$("b_con").checked,org=d&&$("b_org").checked;
+ const so=[...$("priv").options].find(o=>o.value==="SELF_ONLY");if(so){so.disabled=con;so.title=con?"Branded content visibility cannot be set to private":"";}if(con&&$("priv").value==="SELF_ONLY")$("priv").value="";
+ $("dischint").textContent=d&&!con&&!org?"You need to indicate if your content promotes yourself, a third party, or both.":"";
+ $("decl").innerHTML="By posting, you agree to TikTok's "+(con?'<a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank">Branded Content Policy</a> and ':'')+'<a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Music Usage Confirmation</a>.';
+ $("pub").disabled=!(files.length&&$("priv").value&&(!d||con||org));}
+["priv","disc","b_org","b_con"].forEach(i=>$(i).onchange=upd);
+$("pub").onclick=async()=>{$("pub").disabled=true;const S=t=>$("status").textContent="Status: "+t;
+ try{const d=$("disc").checked,base={title:$("cap").value,privacy_level:$("priv").value,disable_comment:!$("c_comment").checked,brand_content_toggle:d&&$("b_con").checked,brand_organic_toggle:d&&$("b_org").checked};let r;
+ if(isPhoto()){S("uploading photos…");const urls=[];for(const f of files){const fd=new FormData();fd.append("file",f);const u=await fetch(W+"/photo",{method:"POST",body:fd}).then(r=>r.json());if(!u.url)throw Error("photo upload failed");urls.push(u.url);}
+  r=await api("post/publish/content/init/",{post_info:{...base,description:$("cap").value,title:$("cap").value.slice(0,90)},source_info:{source:"PULL_FROM_URL",photo_cover_index:0,photo_images:urls},post_mode:"DIRECT_POST",media_type:"PHOTO"});}
+ else{const f=files[0];S("initialising upload…");
+  r=await api("post/publish/video/init/",{post_info:{...base,disable_duet:!$("c_duet").checked,disable_stitch:!$("c_stitch").checked},source_info:{source:"FILE_UPLOAD",video_size:f.size,chunk_size:f.size,total_chunk_count:1}});
+  if(r.error.code!=="ok")throw Error(r.error.message);S("uploading video…");
+  const up=await fetch(r.data.upload_url,{method:"PUT",headers:{"Content-Type":f.type||"video/mp4","Content-Range":`bytes 0-${f.size-1}/${f.size}`},body:f});if(!up.ok)throw Error("upload failed "+up.status);}
+ if(r.error.code!=="ok")throw Error(r.error.message);const id=r.data.publish_id;
+ for(let i=0;i<60;i++){await new Promise(z=>setTimeout(z,3000));const s=await api("post/publish/status/fetch/",{publish_id:id});const st=s.data&&s.data.status;S(st+(s.data&&s.data.fail_reason?" – "+s.data.fail_reason:""));
+  if(st==="PUBLISH_COMPLETE"){S("✅ Published to TikTok!");break;}if(st==="FAILED")break;}
+ }catch(e){S("❌ "+e.message);}upd();};
+init();
+</script></body></html>
